@@ -1,6 +1,11 @@
-import requests
+import httpx
 
-from src.application.exceptions import AlreadyExistsError, NotFoundError, ValidationError
+from src.application.exceptions import (
+    AlreadyExistsError,
+    NotFoundError,
+    ValidationError,
+    InvalidDataError,
+)
 from src.application.dtos.users import (
     Token,
     RefreshToken,
@@ -44,12 +49,16 @@ class UserUseCase:
         self.token_service = token_service
         self.background_service = background_service
 
-    async def registration(self, data: UserRegister):
-        input_data = data.model_dump()
+    async def registration(self, data: UserRegister) -> dict:
+        input_data = data.model_dump(exclude_unset=True)
         input_data['password'] = PasswordService.generate(data.password)
 
         if data.avatar:
-            image = {'path': 'media/users/', 'image': data.avatar}
+            image = {
+                'path': 'media/users/',
+                'image': data.avatar,
+                'username': data.username
+            }
             input_data['avatar'] = await prepare_image_data(image)
 
         async with self.repository.uow:
@@ -59,7 +68,7 @@ class UserUseCase:
         token_data = {'user_id': user.id, 'email': data.email}
         return {'message': response, 'token_data': token_data}
 
-    async def confirm_registration(self, token: str) -> dict:
+    async def confirm_registration(self, token: str) -> UserSchema:
         data = await self.token_service.decode(token)
         user_id = data['user_id']
 
@@ -73,6 +82,9 @@ class UserUseCase:
 
     async def login(self, username: str, password: str) -> Token:
         user = await self.get_user(username)
+
+        if user.provider != 'local':
+            raise InvalidDataError('User is registered with social provider')
         PasswordService.check(password, user.password)
 
         jwt_data = {'id': user.id, 'username': user.username}
@@ -88,7 +100,7 @@ class UserUseCase:
         await self.redis_repo.sadd('jwt_blacklist', token)
         return {'status': 'You logged out'}
 
-    async def update_token(self, form_data: RefreshToken):
+    async def update_token(self, form_data: RefreshToken) -> Token:
         refresh = form_data.refresh_token
         token_data = await self.token_service.decode(refresh, self.redis_repo)
 
@@ -102,17 +114,19 @@ class UserUseCase:
             access = self.token_service.encode(token_data)
             return Token(access_token=access)
 
-    async def get_users(self):
-        return await self.repository.list()
+    async def get_users(self) -> list[UserSchema]:
+        users = await self.repository.list()
+        return [UserSchema(**user.to_entity().to_dict()) for user in users]
 
-    async def get_user(self, username: str):
-        return await self.repository.retrieve(username=username)
+    async def get_user(self, username: str) -> UserComplete:
+        user = await self.repository.retrieve(username=username)
+        return UserComplete(**user.to_dict())
 
     async def get_user_data(self, token: str) -> dict:
         token_data = await self.token_service.decode(token, rdb=self.redis_repo)
         return token_data
 
-    async def get_user_offers(self, data: str):
+    async def get_user_offers(self, data: str) -> list[dict]:
         owner = await self.repository.get_user_offers(data)
         offers = owner.offers
         response_data = []
@@ -121,7 +135,7 @@ class UserUseCase:
             response_data.append(formatted)
         return response_data
 
-    async def update_user(self, user_id: int, data: UserUpdate) -> dict:
+    async def update_user(self, user_id: int, data: UserUpdate) -> UserSchema:
         async with self.repository.uow:
             input_data = data.model_dump(exclude_unset=True)
             if data.avatar:
@@ -134,12 +148,18 @@ class UserUseCase:
                 )
             response = await self.repository.update(input_data, id=user_id)
         return UserSchema(**response.to_dict())
+    
+    async def reset_avatar(self, user_id: int) -> dict:
+        async with self.repository.uow:
+            default_avatar = 'static/img/user_logo.png'
+            await self.repository.update({'avatar': default_avatar}, id=user_id)
+        return {'status': 'Avatar has been deleted'}
 
     async def change_password(
         self,
         user: UserComplete,
         form_data: PasswordChange,
-    ):
+    ) -> dict:
         PasswordService.check(form_data.old_password, user.password)
         pswd = PasswordService.generate(form_data.new_password)
         async with self.repository.uow:
@@ -182,7 +202,7 @@ class UserUseCase:
             await self.repository.update({'password': pswd}, id=user_id)
         return {'status': 'Password has been changed'}
 
-    def send_confirmation_letter(self, data: dict):
+    def send_confirmation_letter(self, data: dict) -> str:
         prepared = self.prepare_mail_data(data)
         return self.background_service.send_confirmation_letter(
             token_service=self.token_service,
@@ -190,7 +210,7 @@ class UserUseCase:
             token_data=prepared['token_data'],
         )
 
-    def send_password_reset(self, data: dict):
+    def send_password_reset(self, data: dict) -> str:
         prepared = self.prepare_mail_data(data)
         return self.background_service.send_password_reset(
             token_service=self.token_service,
@@ -215,13 +235,15 @@ class CompanyUseCase:
     def __init__(self, repository: ICompanyRepository):
         self.repository = repository
 
-    async def get_companies(self):
-        return await self.repository.list()
+    async def get_companies(self) -> list[CompanySchema]:
+        companies = await self.repository.list()
+        return [CompanySchema(**company.to_entity().to_dict()) for company in companies]
 
-    async def get_company(self, name: str):
-        return await self.repository.retrieve(name=name)
+    async def get_company(self, name: str) -> CompanySchema:
+        company = await self.repository.retrieve(name=name)
+        return CompanySchema(**company.to_dict())
 
-    async def get_company_offers(self, name: str):
+    async def get_company_offers(self, name: str) -> list[dict]:
         company = await self.repository.get_company_offers(name)
         offers = company.user.offers
         response_data = []
@@ -230,12 +252,12 @@ class CompanyUseCase:
             response_data.append(formatted)
         return response_data
 
-    async def register_company(self, user_id: int, data: CompanyRegister):
+    async def register_company(self, user_id: int, data: CompanyRegister) -> CompanySchema:
         input_data = data.model_dump()
         input_data['user_id'] = user_id
 
         if data.logo:
-            image = {'path': 'media/companies/', 'image': image}
+            image = {'path': 'media/companies/', 'image': data.logo}
             input_data['logo'] = await prepare_image_data(image)
 
         async with self.repository.uow:
@@ -246,13 +268,17 @@ class CompanyUseCase:
         self,
         user_id: int,
         data: CompanyUpdate,
-    ) -> dict:
+    ) -> CompanySchema:
         async with self.repository.uow:
             input_data = data.model_dump(exclude_unset=True)
             if data.logo:
                 logo = data.logo
                 path = 'media/users/' + logo.filename
-                input_data['logo'] = await generate_image_path(path, logo, logo.content_type)
+                input_data['logo'] = await generate_image_path(
+                    path=path,
+                    image=logo,
+                    content_type=logo.content_type,
+                )
             company = await self.repository.get_user_company(user_id)
             response = await self.repository.update(input_data, id=company.id)
         return CompanySchema(**response.to_dict())
@@ -268,6 +294,7 @@ class UserSocialUseCase:
     def __init__(self, repository: IUserRepository, token_service: ITokenService):
         self.repository = repository
         self.token_service = token_service
+        self.http_client = httpx.AsyncClient()
 
     @staticmethod
     def get_google_link(client_id: str, redirect_uri: str) -> dict:
@@ -287,7 +314,7 @@ class UserSocialUseCase:
         client_id: str,
         client_secret: str,
         redirect_uri: str,
-    ):
+    ) -> Token:
         token_url = 'https://accounts.google.com/o/oauth2/token'
         data = {
             'code': code,
@@ -296,47 +323,53 @@ class UserSocialUseCase:
             'redirect_uri': redirect_uri,
             'grant_type': 'authorization_code',
         }
-        response = requests.post(token_url, data=data).json()
+
+        response = await self.http_client.post(token_url, data=data)
         
         # get user info
-        access_token = response.get('access_token')
+        access_token = response.json().get('access_token')
         user_info_url = 'https://www.googleapis.com/oauth2/v1/userinfo'
         user_info_header = {'Authorization': f'Bearer {access_token}'}
-        user_info = requests.get(user_info_url, headers=user_info_header).json()
+        user_info = await self.http_client.get(user_info_url, headers=user_info_header)
+        user_info_response = user_info.json()
 
-        google_id = user_info.get('id')
-        email = user_info.get('email')
-        picture = user_info.get('picture')
+        google_id = user_info_response.get('id')
+        email = user_info_response.get('email')
+        picture = user_info_response.get('picture')
 
         # check if user exists
         try:
             user = await self.repository.retrieve(email=email)
         except NotFoundError:
             return {
-                'url': 'http://localhost:8000/auth/google-auth/register',
+                'google_url': 'http://localhost:8000/auth/google-auth/register',
                 'email': email,
                 'google_id': google_id,
                 'avatar': picture,
             }
         else:
-            if user.provider == 'google':
-                data = {'id': user.id, 'username': user.username}
-                access_token = self.token_service.encode(data)
-                refresh_token = self.token_service.encode(data, exp_time=1440)
-                return Token(access_token=access_token, refresh_token=refresh_token)
-            else:
-                raise AlreadyExistsError('User already exists.')
+            if user.provider != 'google':
+                switch_to_google = {
+                    'provider': 'google',
+                    'social_id': google_id,
+                }
+                async with self.repository.uow:
+                    await self.repository.update(switch_to_google, id=user.id)
+            data = {'id': user.id, 'username': user.username}
+            access_token = self.token_service.encode(data)
+            refresh_token = self.token_service.encode(data, exp_time=1440)
+            return Token(access_token=access_token, refresh_token=refresh_token)
 
-    async def google_registration(self, data: UserSocialRegister):
+    async def google_registration(self, data: UserSocialRegister) -> UserSchema:
         input_data = data.model_dump(exclude_unset=True)
         input_data['provider'] = 'google'
         input_data['is_active'] = True
         if data.avatar:
             avatar_url = data.avatar
-            path = 'media/users/' + f'u_{input_data['social_id']}.png'
-            avatar_data = requests.get(avatar_url).content
+            path = 'media/users/' + f'{input_data['username']}.png'
+            avatar_data = await self.http_client.get(avatar_url)
             with open('src/' + path, 'wb') as f:
-                f.write(avatar_data)
+                f.write(avatar_data.content)
             input_data['avatar'] = path
 
         async with self.repository.uow:

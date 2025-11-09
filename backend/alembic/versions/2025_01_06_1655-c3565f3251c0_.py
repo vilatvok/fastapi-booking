@@ -1,8 +1,8 @@
 """empty message
 
-Revision ID: 9a52db659f9c
+Revision ID: c3565f3251c0
 Revises: 
-Create Date: 2024-12-23 13:43:31.094422
+Create Date: 2025-01-06 16:55:35.314319
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '9a52db659f9c'
+revision: str = 'c3565f3251c0'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -26,7 +26,7 @@ def upgrade() -> None:
     sa.Column('password', sa.String(), nullable=True),
     sa.Column('is_active', sa.Boolean(), nullable=False),
     sa.Column('is_company', sa.Boolean(), nullable=False),
-    sa.Column('avatar', sa.String(), nullable=False),
+    sa.Column('avatar', sa.String(), server_default='static/img/user_logo.png', nullable=False),
     sa.Column('social_id', sa.String(), nullable=True),
     sa.Column('provider', sa.String(), nullable=False),
     sa.Column('id', sa.Integer(), nullable=False),
@@ -39,6 +39,7 @@ def upgrade() -> None:
     sa.Column('first_user_id', sa.Integer(), nullable=False),
     sa.Column('second_user_id', sa.Integer(), nullable=False),
     sa.Column('id', sa.Integer(), nullable=False),
+    sa.CheckConstraint('first_user_id != second_user_id'),
     sa.ForeignKeyConstraint(['first_user_id'], ['users.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['second_user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
@@ -76,7 +77,8 @@ def upgrade() -> None:
     sa.Column('id', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['offer_id'], ['offer.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id')
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('user_id', 'offer_id', name='unique_user_offer_feedback')
     )
     op.create_table('image',
     sa.Column('data', sa.String(), nullable=False),

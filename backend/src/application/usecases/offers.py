@@ -16,10 +16,15 @@ class OfferUseCase:
     def __init__(self, repository: IOfferRepository):
         self.repository = repository
 
-    async def create_offer(self, user_id: int, offer: OfferCreate, images: list):
+    async def create_offer(
+        self,
+        user_id: int,
+        offer: OfferCreate,
+        # images: list
+    ) -> OfferCreateOutput:
         async with self.repository.uow:
             # Save offer
-            offer_data = offer.model_dump(exclude=['prices'])
+            offer_data = offer.model_dump(exclude=['prices', 'images'])
             offer_data['owner_id'] = user_id
             offer_response = await self.repository.add(offer_data)
             offer_id = offer_response.id
@@ -32,7 +37,7 @@ class OfferUseCase:
             # Save images
             images_input = []
             folder = 'media/offers/'
-            for image in images:
+            for image in offer.images:
                 img_path = folder + image.filename
                 path = await generate_image_path(
                     path=img_path,
@@ -50,7 +55,7 @@ class OfferUseCase:
         response['prices'] = prices.to_dict()
         return OfferCreateOutput(**response)
 
-    async def get_offer(self, offer_id: int):
+    async def get_offer(self, offer_id: int) -> OfferUnitSchema:
         offer, avg_rating = await self.repository.retrieve(id=offer_id)
         response_data = format_offer(offer)
 
@@ -66,33 +71,33 @@ class OfferUseCase:
         response_data['avg_rating'] = avg_rating
         return OfferUnitSchema(**response_data)
 
-    async def get_offers(self):
+    async def get_offers(self) -> list[OfferSchema]:
         offers = await self.repository.list()
         response_data = []
         for offer in offers:
             response_data.append(OfferSchema(**format_offer(offer)))
         return response_data
 
-    async def update_offer(self, offer_id: int, data: OfferUpdate):
+    async def update_offer(self, offer_id: int, data: OfferUpdate) -> OfferUpdate:
         offer_data = data.model_dump(exclude=['prices'], exclude_unset=True)
-        prices_data = data.prices.model_dump(exclude_unset=True)
         response = {}
         async with self.repository.uow:
             if offer_data:
                 offer = await self.repository.update(offer_data, id=offer_id)
                 response = offer.to_dict()
             if data.prices:
+                prices_data = data.prices.model_dump(exclude_unset=True)
                 filter_by = {'offer_id': offer_id}
                 prices = await self.repository.update_prices(prices_data, filter_by)
                 response['prices'] = prices.to_dict()
         return OfferUpdate(**response)
 
-    async def delete_offer(self, offer_id: int):
+    async def delete_offer(self, offer_id: int) -> dict:
         async with self.repository.uow:
             await self.repository.delete(offer_id)
         return {'status': 'Deleted'}
 
-    async def create_feedback(self, data: dict):
+    async def create_feedback(self, data: dict) -> FeedbackCreate:
         async with self.repository.uow:
             response = await self.repository.add_feedback(data)
         return FeedbackCreate(**response.to_dict())

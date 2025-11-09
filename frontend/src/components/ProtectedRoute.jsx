@@ -4,33 +4,31 @@ import { useAuth } from "../hooks/AuthProvider";
 import { REFRESH_TOKEN, ACCESS_TOKEN } from "../data/constants";
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { clearStorage, getItem, setItem } from "../utils/localstorage";
 
-function ProtectedRoute() {
+export default function ProtectedRoute() {
   const { token } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    auth();
+    isAuthenticated();
   }, []);
 
   const refreshToken = async () => {
-    const refreshToken = localStorage.getItem(REFRESH_TOKEN);
-    try {
-      const res = await api.post("auth/token/refresh", {
-        refresh_token: refreshToken,
-      });
-      if (res.status === 200) {
-        localStorage.setItem(ACCESS_TOKEN, res.data.access_token);
-      } else {
-        localStorage.clear();
-      }
-    } catch (error) {
-      console.log(error);
-      localStorage.clear();
-    }
+    const token = getItem(REFRESH_TOKEN);
+    await api
+      .post("auth/token/refresh", {refresh_token: token})
+      .then((res) => {
+        if (res.status === 200) {
+          setItem(ACCESS_TOKEN, res.data.access_token);
+        } else {
+          clearStorage();
+        }
+      })
+      .catch((err) => clearStorage());
   };
 
-  const auth = async () => {
+  const isAuthenticated = async () => {
     if (!token) {
       return;
     }
@@ -42,17 +40,10 @@ function ProtectedRoute() {
       return;
     }
     const username = token.username;
-    const userExists = await api
+    await api
       .get(`users/${username}`)
-      .then((res) => res.status)
-      .catch((err) => console.log(err));
-    
-    if (userExists !== 200) {
-      navigate("/auth/login");
-    }
+      .then((res) => { if (res.status !== 200) navigate("/auth/login"); })
   };
 
   return token ? <Outlet /> : <Navigate to="/auth/login" />;
-}
-
-export default ProtectedRoute;
+};

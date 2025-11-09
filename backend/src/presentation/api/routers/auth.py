@@ -36,7 +36,7 @@ async def registration(
     user_usecase: user_usecase,
     background: BackgroundTasks,
     form_data: Annotated[UserRegister, Form(media_type="multipart/form-data")],
-):
+) -> dict:
     response = await user_usecase.registration(form_data)
     token_data = response.get('token_data')
 
@@ -58,23 +58,21 @@ async def registration(
     path='/register-confirm/{token}',
     dependencies=[anonymous_user],
     status_code=status.HTTP_201_CREATED,
-    response_model=UserSchema,
 )
-async def confirm_registration(token: str, user_usecase: user_usecase):
+async def confirm_registration(
+    token: str,
+    user_usecase: user_usecase,
+) -> UserSchema:
     user = await user_usecase.confirm_registration(token)
     scheduler.remove_job(f'delete_inactive_{user.id}')
     return user
 
 
-@router.post(
-    path='/login',
-    dependencies=[anonymous_user],
-    response_model=Token,
-)
+@router.post('/login', dependencies=[anonymous_user])
 async def login(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     user_usecase: user_usecase,
-):
+) -> Token:
     return await user_usecase.login(form_data.username, form_data.password)
 
 
@@ -82,12 +80,15 @@ async def login(
 async def logout(
     token: Annotated[OAuth2PasswordBearer, Depends(user_oauth2_scheme)],
     user_usecase: user_usecase,
-):
+) -> dict:
     return await user_usecase.logout(token)
 
 
-@router.post('/token/refresh', response_model=Token)
-async def update_token(form_data: RefreshToken, user_usecase: user_usecase):
+@router.post('/token/refresh')
+async def update_token(
+    form_data: RefreshToken,
+    user_usecase: user_usecase
+) -> Token:
     return await user_usecase.update_token(form_data)
 
 
@@ -95,13 +96,13 @@ async def update_token(form_data: RefreshToken, user_usecase: user_usecase):
 async def google_link(
     settings: Annotated[Settings, Depends(get_settings)],
     user_social_usecase: user_social_usecase,
-):
+) -> dict:
     client_id = settings.google_client_id
     redirect_uri = settings.google_redirect_uri
     return user_social_usecase.get_google_link(client_id, redirect_uri)
 
 
-@router.get(
+@router.post(
     path='/google-auth/login',
     dependencies=[anonymous_user],
     status_code=status.HTTP_200_OK,
@@ -110,7 +111,7 @@ async def google_authentication(
     code: str,
     settings: Annotated[Settings, Depends(get_settings)],
     user_social_usecase: user_social_usecase,
-):
+) -> Token:
     return await user_social_usecase.google_authentication(
         code=code,
         client_id=settings.google_client_id,
@@ -123,10 +124,9 @@ async def google_authentication(
     path='/google-auth/register',
     status_code=status.HTTP_201_CREATED,
     dependencies=[anonymous_user],
-    response_model=UserSchema,
 )
 async def google_registration(
     form_data: Annotated[UserSocialRegister, Form(media_type="multipart/form-data")],
     user_social_usecase: user_social_usecase,
-):  
+) -> UserSchema:  
     return await user_social_usecase.google_registration(form_data)

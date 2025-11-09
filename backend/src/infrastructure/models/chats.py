@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import ForeignKey, text, CheckConstraint
+from sqlalchemy import ForeignKey, text, CheckConstraint, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.entities import chats as entities
@@ -11,13 +11,16 @@ class Chat(Base):
     __tablename__ = 'chat'
     __table_args__ = (
         CheckConstraint('first_user_id != second_user_id'),
+        UniqueConstraint('first_user_id', 'second_user_id', name='unique_users')
     )
 
     first_user_id: Mapped[int] = mapped_column(
-        ForeignKey('users.id', ondelete='CASCADE')
+        ForeignKey('users.id', ondelete='SET NULL'),
+        nullable=True,
     )
     second_user_id: Mapped[int] = mapped_column(
-        ForeignKey('users.id', ondelete='CASCADE')
+        ForeignKey('users.id', ondelete='SET NULL'),
+        nullable=True,
     )
 
     first_user: Mapped['User'] = relationship(
@@ -28,7 +31,10 @@ class Chat(Base):
         back_populates='chats',
         foreign_keys=[second_user_id]
     )
-    messages: Mapped[list['Message']] = relationship(back_populates='chat')
+    messages: Mapped[list['Message']] = relationship(
+        back_populates='chat',
+        cascade='all, delete-orphan',
+    )
 
     def to_entity(self):
         return entities.Chat(
@@ -45,7 +51,8 @@ class Message(Base):
         ForeignKey('chat.id', ondelete='CASCADE')
     )
     sender_id: Mapped[int] = mapped_column(
-        ForeignKey('users.id', ondelete='CASCADE')
+        ForeignKey('users.id', ondelete='SET NULL'),
+        nullable=True,
     )
     content: Mapped[str]
     timestamp: Mapped[datetime] = mapped_column(

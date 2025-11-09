@@ -1,4 +1,4 @@
-from sqlalchemy import select, or_, and_
+from sqlalchemy import delete, select, or_, and_
 from sqlalchemy.orm import joinedload
 
 from src.application.interfaces.repositories.chats import IChatRepository
@@ -59,7 +59,8 @@ class ChatRepository(SQLAlchemyRepository, IChatRepository):
                 )
             )
         )
-        return await self.get_scalar(query)
+        res = await self.session.execute(query)
+        return res.scalar_one()
 
     @switch_model(Message)
     async def get_chat_messages(self, chat_id: int):
@@ -69,7 +70,13 @@ class ChatRepository(SQLAlchemyRepository, IChatRepository):
                 joinedload(self.model.sender).
                 selectin_polymorphic([User, Company])
             ).
-            where(self.model.chat_id == chat_id)
+            where(self.model.chat_id == chat_id).
+            order_by(self.model.timestamp)
         )
         messages = await self.session.execute(query)
         return messages.scalars().all()
+
+    @switch_model(Message)
+    async def clear_chat(self, chat_id: int):
+        query = delete(self.model).where(self.model.chat_id == chat_id)
+        await self.session.execute(query)

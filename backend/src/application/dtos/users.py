@@ -25,7 +25,7 @@ class UserRegister(BaseUser):
 
 class UserSocialRegister(BaseUser):
     social_id: str
-    avatar: str | None = None
+    avatar: UploadFile | str | None = None
 
 
 class UserUpdate(BaseUser):

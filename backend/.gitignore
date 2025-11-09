@@ -1,5 +1,4 @@
 ﻿alembic.ini
-poetry.lock
 .env
 
 .venv/

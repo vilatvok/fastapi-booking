@@ -1,34 +1,22 @@
-import HandleForm from "../components/AuthForm";
 import { useLocation } from "react-router-dom";
+import RegisterForm from "../components/RegisterForm";
 
 
 export function UserRegister() {
   const location = useLocation();
-  if (location.state.googleData) {
+  if (location.state) {
     return (
-      <HandleForm
+      <RegisterForm
         route="/auth/google-auth/register"
-        method="register"
         googleData={location.state.googleData}
       />
     );
   } else {
-    return (
-      <HandleForm 
-        route="/auth/register"
-        method="register" 
-      />
-    );
+    return <RegisterForm route="/auth/register" />;
   }
 }
 
 
 export function CompanyRegister() {
-  return (
-    <HandleForm
-      route="/companies/register"
-      method="register"
-      googleData={null}
-    />
-  );
+  return <RegisterForm route="/companies/register" />;
 }

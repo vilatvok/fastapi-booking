@@ -1,8 +1,9 @@
 import { jwtDecode } from "jwt-decode";
 import { ACCESS_TOKEN } from "../data/constants";
+import { getItem } from "../utils/localstorage";
 
 export function useCurrentUser() {
-  const token = localStorage.getItem(ACCESS_TOKEN);
+  const token = getItem(ACCESS_TOKEN);
   if (!token) {
     return null;
   }

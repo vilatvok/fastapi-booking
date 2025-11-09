@@ -27,9 +27,19 @@ class Offer(Base):
 
     # Relationships
     owner: Mapped['User'] = relationship(back_populates='offers')
-    images: Mapped[list['Image']] = relationship(back_populates='offer')
-    prices: Mapped['Price'] = relationship(back_populates='offer')
-    feedbacks: Mapped[list['Feedback']] = relationship(back_populates='offer')
+    images: Mapped[list['Image']] = relationship(
+        back_populates='offer',
+        cascade='all, delete-orphan',
+    )
+    prices: Mapped['Price'] = relationship(
+        back_populates='offer',
+        cascade='all, delete-orphan',
+        uselist=False,
+    )
+    feedbacks: Mapped[list['Feedback']] = relationship(
+        back_populates='offer',
+        cascade='all, delete-orphan',
+    )
 
     def to_entity(self):
         return entities.Offer(

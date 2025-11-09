@@ -20,3 +20,7 @@ class IChatRepository(ISqlRepository):
     @abstractmethod
     async def add_message(self, data: dict):
         raise NotImplementedError
+
+    @abstractmethod
+    async def clear_chat(self, chat_id: int):
+        raise NotImplementedError

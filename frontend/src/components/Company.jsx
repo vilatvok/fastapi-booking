@@ -1,9 +1,10 @@
 import api from "../utils/api";
 import { useEffect, useState } from "react";
-import { ACCESS_TOKEN, REFRESH_TOKEN } from "../data/constants";
+import { REFRESH_TOKEN } from "../data/constants";
 import { useNavigate } from "react-router-dom";
+import { getItem, setAuthTokens } from "../utils/localstorage";
 
-function Company({ company, onUpdate }) {
+export default function Company({ company, onUpdate }) {
   const [name, setName] = useState("");
   const [owner, setOwner] = useState("");
   const [email, setEmail] = useState("");
@@ -19,7 +20,7 @@ function Company({ company, onUpdate }) {
   }, [company]);
 
   // get tokens
-  const refreshToken = localStorage.getItem(REFRESH_TOKEN);
+  const refreshToken = getItem(REFRESH_TOKEN);
 
   const editCompany = async (event) => {
     event.preventDefault();
@@ -42,7 +43,6 @@ function Company({ company, onUpdate }) {
     const res = await api
       .patch(`/companies/me`, formData)
       .then((res) => res.status)
-      .catch((err) => console.log(err.response));
 
     if (res === 202) {
       if (name !== company.name) {
@@ -54,11 +54,9 @@ function Company({ company, onUpdate }) {
           .post("/auth/token/refresh", tokenData)
           .then((res) => {
             if (res.status === 200) {
-              localStorage.setItem(ACCESS_TOKEN, res.data.access_token);
-              localStorage.setItem(REFRESH_TOKEN, res.data.refresh_token);
+              setAuthTokens(res.data.access_token, res.data.refresh_token);
             }
           })
-          .catch((err) => console.log(err));
       }
       onUpdate(name);
       setEditing(false);
@@ -209,5 +207,3 @@ function Company({ company, onUpdate }) {
     </div>
   );
 }
-
-export default Company;

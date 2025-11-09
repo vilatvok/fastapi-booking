@@ -15,11 +15,10 @@ user_oauth2_scheme = OAuth2PasswordBearer(
 async def get_current_user(
     token: Annotated[str, Depends(user_oauth2_scheme)],
     user_usecase: user_usecase,
-):
+) -> UserComplete:
     token_data = await user_usecase.get_user_data(token)
     username = token_data.get('username')
-    username = await user_usecase.get_user(username)
-    return UserComplete(**username.__dict__)
+    return await user_usecase.get_user(username)
 
 
 def get_anonymous_user(request: Request):

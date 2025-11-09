@@ -1,52 +1,90 @@
-import { useNavigate } from "react-router-dom";
 import api from "../utils/api";
+import { useAuth } from "../hooks/AuthProvider";
+import { clearStorage } from "../utils/localstorage";
+import { useNavigate } from "react-router-dom";
+import {
+  Box,
+  Button,
+  FormControl,
+  FormLabel,
+  RadioGroup,
+  FormControlLabel,
+  Radio,
+  useColorScheme,
+} from "@mui/material";
 
 
-function Settings() {
-  const navigate = useNavigate();
-  const deleteUser = async () => {
-    await api.delete("/users/me").
-      then((res) => {
-        if (res.status === 204) {
-          localStorage.clear();
-          navigate("/auth/login");
-        }
-      }).
-      catch((err) => {
-        console.log(err);
-      });
+export function ToggleMode() {
+  const { mode, setMode } = useColorScheme();
+  if (!mode) {
+    return null;
   }
 
   return (
-    <div className="m-5">
-      <button
-        onClick={() => deleteUser()}
-        className="inline-flex items-center px-3 py-2 text-sm font-medium 
-        text-center text-white bg-teal-500
-        rounded-lg hover:bg-teal-600 focus:ring-4 focus:outline-none 
-        focus:ring-blue-300 dark:bg-teal-500
-        dark:hover:bg-teal-600 dark:focus:ring-blue-800"
-      >
-        Deactivate
-        <svg
-          className="rtl:rotate-180 w-3.5 h-3.5 ms-2"
-          aria-hidden="true"
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 14 10"
+    <Box
+      sx={{
+        display: 'flex',
+        width: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+        bgcolor: 'background.default',
+        color: 'text.primary',
+        borderRadius: 1,
+        p: 3,
+        minHeight: '56px',
+      }}
+    >
+      <FormControl>
+        <FormLabel id="demo-theme-toggle">Theme</FormLabel>
+        <RadioGroup
+          aria-labelledby="demo-theme-toggle"
+          name="theme-toggle"
+          row
+          value={mode}
+          onChange={(event) => setMode(event.target.value)}
         >
-          <path
-            stroke="currentColor"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="2"
-            d="M1 5h12m0 0L9 1m4 4L9 9"
-          />
-        </svg>
-      </button>
-    </div>
+          <FormControlLabel value="system" control={<Radio />} label="System" />
+          <FormControlLabel value="light" control={<Radio />} label="Light" />
+          <FormControlLabel value="dark" control={<Radio />} label="Dark" />
+        </RadioGroup>
+      </FormControl>
+    </Box>
   );
 }
 
 
-export default Settings;
+export default function Settings() {
+  const auth = useAuth();
+  const navigate = useNavigate();
+
+  const deleteUser = async () => {
+    await api
+      .delete("/users/me")
+      .then((res) => {
+        if (res.status === 204) {
+          clearStorage();
+          auth.logout();
+        }
+      })
+  }
+
+  return (
+    <div className="m-5">
+      <Button 
+        onClick={() => deleteUser()}
+        variant="contained"
+        color="success"
+      >
+        Deactivate account
+      </Button>
+      <Button 
+        onClick={() => navigate('/password')}
+        variant="contained"
+        color="success"
+      >
+        Change password
+      </Button>
+      <ToggleMode />
+    </div>
+  );
+}

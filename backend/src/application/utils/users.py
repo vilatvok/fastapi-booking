@@ -38,7 +38,8 @@ class PasswordService:
 
 async def prepare_image_data(file: dict) -> str:
     image = file['image']
-    path = file['path'] + image.filename
+    image_ext = image.filename.split('.')[-1]
+    path = f'{file['path']}{file['username']}.{image_ext}'
     return await generate_image_path(
         path=path,
         image=image,

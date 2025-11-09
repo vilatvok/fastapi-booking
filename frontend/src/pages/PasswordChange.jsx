@@ -3,26 +3,20 @@ import { useNavigate } from "react-router-dom";
 import api from "../utils/api";
 
 
-function PasswordChange() {
+export default function PasswordChange() {
   const [oldPswd, setOldPswd] = useState("");
   const [newPswd, setNewPswd] = useState("");
   const navigate = useNavigate();
   const handleSubmit = async (e) => {
     e.preventDefault(); // Prevent page reload on form submission
+
     const data = {
       old_password: oldPswd,
       new_password: newPswd,
-    };
-  
-    try {
-      const res = await api.put("/users/password", data);
-      if (res.status === 202) {
-        console.log("Password updated");
-        navigate("/");
-      }
-    } catch (err) {
-      console.error("Error:", err);
-    }
+    };  
+    await api
+      .put("/users/password", data)
+      .then((res) => { if (res.status === 202) navigate("/"); })
   };
 
   return (
@@ -87,5 +81,3 @@ function PasswordChange() {
     </div>
   );
 }
-
-export default PasswordChange;

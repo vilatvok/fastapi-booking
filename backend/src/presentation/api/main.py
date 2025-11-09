@@ -2,10 +2,13 @@ import logging
 import contextlib
 
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi_pagination import add_pagination
 from sqladmin import Admin
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from src.application.exceptions import (
     InvalidDataError,
@@ -31,6 +34,8 @@ from src.presentation.api.routers.users import router as user_router
 from src.presentation.api.routers.companies import router as company_router
 from src.presentation.api.routers.auth import router as auth_router
 from src.presentation.api.routers.chats import router as chat_router
+from src.presentation.api.rate_limiter import limiter
+from src.presentation.api import exceptions
 
 
 logging.basicConfig()
@@ -47,54 +52,18 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+app.state.limiter = limiter
+app.add_middleware(SlowAPIMiddleware)
 
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(NotFoundError, exceptions.not_found_error_handler)
+app.add_exception_handler(InvalidDataError, exceptions.invalid_data_error_handler)
+app.add_exception_handler(RepositoryError, exceptions.repository_error_handler)
+app.add_exception_handler(AlreadyExistsError, exceptions.already_exists_error_handler)
+app.add_exception_handler(ValidationError, exceptions.validation_error_handler)
+app.add_exception_handler(PermissionError, exceptions.permission_error_handler)
 
-@app.exception_handler(RepositoryError)
-async def repository_error_handler(request, exc):
-    return JSONResponse(
-        status_code=500,
-        content={'message': str(exc)},
-    )
-
-
-@app.exception_handler(InvalidDataError)
-async def invalid_data_error_handler(request, exc):
-    return JSONResponse(
-        status_code=400,
-        content={'message': str(exc)},
-    )
-
-
-@app.exception_handler(AlreadyExistsError)
-async def already_exists_error_handler(request, exc):
-    return JSONResponse(
-        status_code=409,
-        content={'message': str(exc)},
-    )
-
-
-@app.exception_handler(ValidationError)
-async def validation_error_handler(request, exc):
-    return JSONResponse(
-        status_code=422,
-        content={'message': str(exc)},
-    )
-
-
-@app.exception_handler(NotFoundError)
-async def not_found_error_handler(request, exc):
-    return JSONResponse(
-        status_code=404,
-        content={'message': str(exc)},
-    )
-
-
-@app.exception_handler(PermissionError)
-async def permission_error_handler(request, exc):
-    return JSONResponse(
-        status_code=403,
-        content={'message': str(exc)},
-    )
+add_pagination(app)
 
 
 # add cors for react app

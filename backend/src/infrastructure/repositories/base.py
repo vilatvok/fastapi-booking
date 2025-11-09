@@ -62,7 +62,7 @@ class SQLAlchemyRepository(ISqlRepository):
             return response.scalar_one().to_entity()
         except IntegrityError as e:
             raise RepositoryError(str(e))
-        except NoResultFound as e:
+        except NoResultFound:
             raise NotFoundError(f'{self.model.__name__} not found')
 
 

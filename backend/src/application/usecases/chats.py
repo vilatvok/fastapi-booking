@@ -1,4 +1,6 @@
-from src.application.dtos.chats import ChatSchema
+from src.application.dtos.users import UserSchema
+from src.application.dtos.chats import ChatSchema, MessageSchema
+from src.application.utils.chats import ConnectionManager
 from src.application.interfaces.services.tokens import ITokenService
 from src.application.interfaces.repositories.users import IUserRepository
 from src.application.interfaces.repositories.chats import IChatRepository
@@ -16,78 +18,46 @@ class ChatUseCase:
         self.user_repo = user_repo
         self.token_service = token_service
 
-    async def create_chat(self, first_user_id: int, second_user_id: int):
+    async def create_chat(
+        self,
+        first_user_id: int,
+        second_user_id: int,
+    ) -> ChatSchema:
         data = {'first_user_id': first_user_id, 'second_user_id': second_user_id}
         async with self.chat_repo.uow:
             chat = await self.chat_repo.add(data)
         return ChatSchema(**chat.to_dict())
 
-    async def get_chats(self, user_id: int) -> list:
-        return await self.chat_repo.get_chats(user_id)
+    async def get_chats(self, user_id: int) -> list[ChatSchema]:
+        chats = await self.chat_repo.get_chats(user_id)
+        return [ChatSchema(**chat.to_entity().to_dict()) for chat in chats]
 
-    async def get_chat(self, user_id: int, chat_id: int):
+    async def get_chat(self, user_id: int, chat_id: int) -> ChatSchema:
         chat = await self.chat_repo.retrieve(chat_id=chat_id, user_id=user_id)
         return ChatSchema(**chat.to_dict())
 
-    async def get_chat_id(self, first_user_id: int, second_user_id: int):
+    async def get_chat_id(self, first_user_id: int, second_user_id: int) -> int:
         chat_id = await self.chat_repo.get_chat_id(first_user_id, second_user_id)
         return chat_id
 
-    async def get_chat_messages(self, chat_id: int):
-        return await self.chat_repo.get_chat_messages(chat_id)
+    async def get_chat_messages(self, chat_id: int) -> list[MessageSchema]:
+        messages = await self.chat_repo.get_chat_messages(chat_id)
+        response = []
+        for msg in messages:
+            msg_data = msg.__dict__
+            msg_data['sender'] = UserSchema(**msg_data['sender'].to_entity().to_dict())
+            response.append(MessageSchema(**msg_data))
+        return response
 
-    async def get_sender_id(self, token: str):
+    async def get_sender(self, token: str) -> int:
         token_data = await self.token_service.decode(token)
         user_id = token_data.get('id')
-        return user_id
+        sender = await self.user_repo.retrieve(id=user_id)
+        return UserSchema(**sender.to_dict())
 
-    async def get_connection_manager(self):
-        return await ConnectionManager(self.chat_repo, self.user_repo)
+    async def clear_chat(self, chat_id: int):
+        async with self.chat_repo.uow:
+            await self.chat_repo.clear_chat(chat_id)
 
-
-class ConnectionManager:
-
-    def __init__(
-        self,
-        chat_repo: IChatRepository,
-        user_repo: IUserRepository,
-    ):
-        self.active_connections: dict[int, list] = {}
-        self.chat_repo = chat_repo
-        self.user_repo = user_repo
-
-    async def connect(self, websocket, chat_id: int):
-        await websocket.accept()
-        if chat_id not in self.active_connections:
-            self.active_connections[chat_id] = []
-        
-        self.active_connections[chat_id].append(websocket)
-        print(self.active_connections)
-
-    def disconnect(self, websocket, chat_id: int):
-        self.active_connections[chat_id].remove(websocket)
-        print(self.active_connections)
-
-    async def send_message(self, data: dict):
-        content = data['content']
-        chat_id = data['chat_id']
-        sender_id = data['sender_id']
-        msg_id = await self.save_to_db(chat_id, sender_id, content)
-        
-        user = self.user_repo.retrieve(id=sender_id)
-        data['id'] = msg_id
-        data['sender'] = {}
-        data['sender']['username'] = user.username
-        data['sender']['avatar'] = user.avatar
-        
-        for connection in self.active_connections[chat_id]:
-            await connection.send_json(data)
-
-    async def receive_message(self, websocket):
-        data = await websocket.receive_json()
-        return data
-
-    async def save_to_db(self, chat_id: int, sender_id: int, content: str):
-        data = {'chat_id': chat_id, 'sender_id': sender_id, 'content': content}
-        async with self.chat_repo.uow:       
-            return await self.chat_repo.add_message(data)
+    def get_connection_manager(self) -> ConnectionManager:
+        return ConnectionManager(self.chat_repo, self.user_repo)

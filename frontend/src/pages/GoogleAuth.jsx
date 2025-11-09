@@ -3,7 +3,7 @@ import { useAuth } from "../hooks/AuthProvider";
 import { Navigate, useSearchParams } from "react-router-dom";
 
 
-function GoogleAuth() {
+export default function GoogleAuth() {
   const auth = useAuth();
   const [params] = useSearchParams();
 
@@ -15,17 +15,15 @@ function GoogleAuth() {
     const is_param = params.get("code");
     if (is_param !== null) {
       let url = "/auth/google-auth/login?code=" + is_param;
-      await auth.googleLogin(url)
+      await auth.login(url)
     }
   };
 
   // Redirect after auth is complete
-  if (auth.token) {
-    return <Navigate to="/" />
+  if (!auth.token) {
+    return <div>Authenticating with Google...</div>
   }
 
-  return <div>Authenticating with Google...</div>
+  return <Navigate to="/" />
 
 }
-
-export default GoogleAuth;

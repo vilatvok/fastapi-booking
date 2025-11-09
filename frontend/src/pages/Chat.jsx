@@ -2,17 +2,20 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { ACCESS_TOKEN } from '../data/constants';
 import { useCurrentUser } from '../hooks/useCurrentUser';
+import { getItem } from '../utils/localstorage';
+import { format, parseISO } from 'date-fns';
 import useWebSocket, { ReadyState } from 'react-use-websocket';
 import api from '../utils/api';
 
-function Chat() {
+
+export default function Chat() {
   const { chat_id } = useParams();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const currUserId = useCurrentUser().id;
 
   const socketUrl = useMemo(
-    () => `ws://localhost:8000/chats/${chat_id}?token=${localStorage.getItem(ACCESS_TOKEN)}`,
+    () => `ws://localhost:8000/chats/${chat_id}?token=${getItem(ACCESS_TOKEN)}`,
     [chat_id]
   );
 
@@ -20,36 +23,53 @@ function Chat() {
     onOpen: () => console.log('WebSocket connected'),
     onMessage: (event) => {
       const message = JSON.parse(event.data);
+      console.log(message)
       setMessages((prev) => [...prev, message]);
     },
     onError: (error) => console.error('WebSocket error:', error),
     onClose: () => console.log('WebSocket disconnected'),
-    shouldReconnect: () => true, // Automatically reconnect on disconnect
+    shouldReconnect: () => true,
   });
 
   useEffect(() => {
-    const fetchMessages = async () => {
-      try {
-        const { data } = await api.get(`/chats/${chat_id}/messages`);
-        setMessages(data);
-      } catch (error) {
-        console.error('Failed to fetch messages:', error);
-      }
-    };
     fetchMessages();
   }, [chat_id]);
 
+  const fetchMessages = async () => {
+    await api
+      .get(`/chats/${chat_id}/messages`)
+      .then((res) => setMessages(res.data.items))
+  };
+
+  const parseMessages = useCallback(() => {
+    return messages.map((msg) => (
+      <Message
+        key={msg.id}
+        message={msg}
+        isCurrentUser={msg.sender.id === currUserId}
+      />
+    ))
+  }, [messages, currUserId]);
+
   const handleSendMessage = useCallback(() => {
     if (readyState === ReadyState.OPEN && input.trim()) {
-      sendMessage(
-        JSON.stringify({ chat_id, sender_id: currUserId, content: input })
-      );
+      const data = {
+        chat_id,
+        sender_id: currUserId,
+        content: input,
+      }
+      sendMessage(JSON.stringify(data));
       setInput('');
     }
   }, [input, chat_id, currUserId, sendMessage, readyState]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') handleSendMessage();
+  };
+
+  const clearChat = async () => {
+    await api.delete(`/chats/${chat_id}/clear`);
+    fetchMessages();
   };
 
   const connectionStatus = useMemo(() => {
@@ -72,12 +92,15 @@ function Chat() {
       <div className="flex flex-col flex-grow w-full max-w-xl bg-white shadow-xl rounded-lg overflow-hidden">
         <div className="flex justify-between items-center bg-gray-200 p-2">
           <h2 className="text-lg font-semibold">Chat Room</h2>
-          <span className="text-xs text-gray-500">{connectionStatus}</span>
+          <button
+            onClick={clearChat}
+            className="bg-blue-600 text-white px-4 rounded"
+          >
+            Clear
+          </button>
         </div>
         <div className="flex flex-col flex-grow h-0 p-4 overflow-auto">
-          {messages.map((msg) => (
-            <Message key={msg.id} message={msg} isCurrentUser={msg.sender_id === currUserId} />
-          ))}
+          {parseMessages()}
         </div>
         <div className="bg-gray-300 p-4 flex space-x-2">
           <input
@@ -100,44 +123,45 @@ function Chat() {
   );
 }
 
-const Message = ({ message, isCurrentUser }) => (
-  <div
-    className={`flex w-full mt-2 space-x-3 max-w-xs ${
-      isCurrentUser ? 'ml-auto justify-end' : ''
-    }`}
-  >
-    {!isCurrentUser && (
-      <img
-        className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-300"
-        src={`http://localhost:8000/${message.sender.avatar}`}
-        alt=""
-      />
-    )}
-    <div>
-      <span className="text-xs text-gray-500 leading-none">
-        {message.sender.username}
-      </span>
-      <div
-        className={`p-3 rounded-lg ${
-          isCurrentUser
+
+function Message({ message, isCurrentUser }) {
+  const formattedDate = format(parseISO(message.timestamp), "yyyy-MM-dd HH:mm:ss");
+
+  return (
+    <div
+      className={`flex w-full mt-2 space-x-3 max-w-xs ${isCurrentUser ? 'ml-auto justify-end' : ''
+        }`}
+    >
+      {!isCurrentUser && (
+        <img
+          className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-300"
+          src={`http://localhost:8000/${message.sender.avatar}`}
+          alt=""
+        />
+      )}
+      <div>
+        <span className="text-xs text-gray-500 leading-none">
+          {message.sender.username}
+        </span>
+        <div
+          className={`p-3 rounded-lg ${isCurrentUser
             ? 'bg-blue-600 text-white rounded-br-lg'
             : 'bg-gray-300 rounded-bl-lg'
-        }`}
-      >
-        <p className="text-sm">{message.content}</p>
+          }`}
+        >
+          <p className="text-sm">{message.content}</p>
+        </div>
+        <span className="text-xs text-gray-500 leading-none">
+          {formattedDate}
+        </span>
       </div>
-      <span className="text-xs text-gray-500 leading-none">
-        {message.timestamp}
-      </span>
+      {isCurrentUser && (
+        <img
+          className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-300"
+          src={`http://localhost:8000/${message.sender.avatar}`}
+          alt=""
+        />
+      )}
     </div>
-    {isCurrentUser && (
-      <img
-        className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-300"
-        src={`http://localhost:8000/${message.sender.avatar}`}
-        alt=""
-      />
-    )}
-  </div>
-);
-
-export default Chat;
+  );
+};

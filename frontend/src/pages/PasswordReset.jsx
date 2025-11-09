@@ -11,13 +11,7 @@ export function PasswordReset() {
     e.preventDefault();
     await api
       .post('/users/password-reset', { email })
-      .then((res) => {
-        if (res.status === 202) {
-          console.log("Email sent");
-          navigate("/auth/login");
-        }
-      })
-      .catch((err) => { console.error("Error:", err) });
+      .then((res) => { if (res.status === 202) navigate("/auth/login"); })
   }
 
   return (
@@ -75,15 +69,7 @@ export function PasswordResetConfirm() {
 
     await api
       .patch(`/auth/password-reset/${token}`, { password1, password2 })
-      .then((res) => {
-        if (res.status === 200) {
-          console.log("Password updated");
-          navigate("/auth/login");
-        }
-      })
-      .catch((err) => {
-        console.error("Error:", err);
-      });
+      .then((res) => { if (res.status === 200) navigate("/auth/login"); })
   };
 
   return (

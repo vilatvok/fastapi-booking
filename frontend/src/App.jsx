@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { UserLogin, Logout } from "./pages/Login";
+import { Login, Logout } from "./pages/Login";
 import { UserRegister, CompanyRegister } from "./pages/Register";
 import { PasswordReset, PasswordResetConfirm } from "./pages/PasswordReset";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -13,16 +13,27 @@ import PasswordChange from "./pages/PasswordChange";
 import AuthProvider from "./hooks/AuthProvider";
 import Chat from "./pages/Chat";
 import Settings from "./pages/Settings";
+import Offer from "./pages/Offer";
+import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { CssBaseline } from "@mui/material";
 
 
-function App() {
+const darkTheme = createTheme({
+  colorSchemes: {
+    dark: true,
+  },
+});
+
+
+export default function App() {
   return (
-    <>
+    <ThemeProvider theme={darkTheme}>
+      <CssBaseline />
       <BrowserRouter>
-        <Navigation />
         <AuthProvider>
+          <Navigation />
           <Routes>
-            <Route path="/" element={<Home />} />
+            <Route index element={<Home />} />
             <Route element={<ProtectedRoute />} >
               <Route path="/password" element={<PasswordChange />} />
               <Route path="/offers/" element={<CreateOffer />} />
@@ -31,8 +42,9 @@ function App() {
               <Route path="/companies/:name" element={<Profile />}/>
               <Route path="/logout" element={<Logout />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/offers/:offer_id" element={<Offer />}/>
             </Route>
-            <Route path="/auth/login" element={<UserLogin />} />
+            <Route path="/auth/login" element={<Login />} />
             <Route path="/auth/register" element={<UserRegister />} />
             <Route
               path="/companies/register"
@@ -45,8 +57,6 @@ function App() {
           </Routes>
         </AuthProvider>
       </BrowserRouter>
-    </>
+    </ThemeProvider>
   );
 }
-
-export default App;

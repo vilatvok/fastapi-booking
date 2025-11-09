@@ -1,8 +1,9 @@
 import json
 
 from datetime import datetime
-from pydantic import BaseModel, Field, model_validator, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_extra_types import phone_numbers
+from fastapi import UploadFile
 
 from src.domain.entities.offers import OfferType
 
@@ -17,6 +18,13 @@ class OfferPrices(BaseModel):
     def ensure_non_negative(cls, value):
         if value < 0:
             raise ValueError("Price values must be non-negative")
+        return value
+
+    @model_validator(mode='before')
+    @classmethod
+    def validate_to_json(cls, value):
+        if isinstance(value, str):
+            return cls(**json.loads(value))
         return value
 
 
@@ -41,14 +49,8 @@ class OfferCreate(BaseModel):
     offer_type: OfferType
     city: str
     phone: phone_numbers.PhoneNumber
-    prices: OfferPrices | None = None
-
-    @model_validator(mode='before')
-    @classmethod
-    def validate_to_json(cls, value):
-        if isinstance(value, str):
-            return cls(**json.loads(value))
-        return value
+    prices: OfferPrices
+    images: list[UploadFile]
 
 
 class OfferCreateOutput(OfferCreate):
@@ -58,6 +60,7 @@ class OfferCreateOutput(OfferCreate):
 
 class OfferSchema(OfferCreateOutput):
     owner: str
+    created_at: datetime
 
 
 class OfferUpdate(OfferCreate):
